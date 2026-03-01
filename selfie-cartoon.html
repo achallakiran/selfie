@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>📸 Cartoon Selfie!</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Boogaloo&family=Nunito:wght@700;900&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#1a1a2e;--accent:#e94560}
+body{background:var(--bg);min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:'Nunito',sans-serif;overflow:hidden;user-select:none}
+h1{font-family:'Boogaloo',cursive;color:#fff;font-size:2.2rem;letter-spacing:2px;margin-bottom:16px;text-shadow:3px 3px 0 var(--accent)}
+
+.phone{position:relative;width:320px;background:#111;border-radius:40px;padding:18px 12px 26px;box-shadow:0 0 0 4px #333,0 20px 60px rgba(0,0,0,0.7)}
+.notch{width:90px;height:18px;background:#111;border-radius:0 0 14px 14px;margin:0 auto 10px;position:relative;z-index:2}
+
+.screen{position:relative;width:100%;height:420px;background:#000;border-radius:20px;overflow:hidden}
+
+/* live camera feed (mirrored) */
+#liveVideo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1);display:none;z-index:1}
+/* canvas showing cartoon-ified live preview */
+#liveCanvas{position:absolute;inset:0;width:100%;height:100%;display:none;z-index:1}
+
+/* fallback */
+#fallbackFeed{position:absolute;inset:0;background:linear-gradient(135deg,#0f3460,#16213e);display:flex;align-items:center;justify-content:center;z-index:1}
+#fallbackFeed::after{content:'';position:absolute;inset:0;background:repeating-linear-gradient(to bottom,transparent,transparent 2px,rgba(0,0,0,0.07) 2px,rgba(0,0,0,0.07) 4px);pointer-events:none}
+.live-person{position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:200px;height:320px}
+
+.grid-overlay{position:absolute;inset:0;pointer-events:none;z-index:3;opacity:0.15;background-image:linear-gradient(rgba(255,255,255,.4) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.4) 1px,transparent 1px);background-size:33.33% 33.33%}
+.brackets{position:absolute;inset:14px;pointer-events:none;z-index:3}
+.bracket{position:absolute;width:22px;height:22px;border-color:rgba(255,255,255,.75);border-style:solid}
+.bracket.tl{top:0;left:0;border-width:3px 0 0 3px}
+.bracket.tr{top:0;right:0;border-width:3px 3px 0 0}
+.bracket.bl{bottom:0;left:0;border-width:0 0 3px 3px}
+.bracket.br{bottom:0;right:0;border-width:0 3px 3px 0}
+
+#camStatus{position:absolute;top:10px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.65);color:#fff;font-size:.68rem;padding:4px 12px;border-radius:20px;white-space:nowrap;z-index:6;pointer-events:none;transition:opacity .6s}
+
+.flash-overlay{position:absolute;inset:0;background:white;opacity:0;pointer-events:none;border-radius:20px;z-index:10}
+.flash-overlay.flash{animation:doFlash .45s ease-out forwards}
+@keyframes doFlash{0%{opacity:1}100%{opacity:0}}
+
+/* ── Photo popup ── */
+.photo-popup{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.7);z-index:20;opacity:0;pointer-events:none;border-radius:20px;transition:opacity .2s}
+.photo-popup.show{opacity:1;pointer-events:all}
+.photo-frame{background:white;padding:8px 8px 10px;border-radius:4px;box-shadow:0 8px 40px rgba(0,0,0,.6);cursor:pointer;animation:popIn .3s cubic-bezier(.17,.67,.35,1.2) forwards;max-width:240px}
+@keyframes popIn{0%{transform:scale(.5) rotate(-2deg)}100%{transform:scale(1) rotate(-2deg)}}
+#snapCanvas{display:block;width:220px;height:220px}
+.photo-caption{text-align:center;font-family:'Boogaloo',cursive;font-size:.95rem;color:#333;margin-top:4px;letter-spacing:.5px}
+.tap-hint{text-align:center;font-size:.62rem;color:rgba(0,0,0,.4);margin-top:2px}
+
+/* ── Birthday card ── */
+#bdayCard{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.75);z-index:30;opacity:0;pointer-events:none;border-radius:20px;transition:opacity .25s}
+#bdayCard.show{opacity:1;pointer-events:all}
+.bday-inner{background:linear-gradient(135deg,#ff6b6b,#ffd93d,#6bcb77,#4d96ff);padding:3px;border-radius:16px;cursor:pointer;animation:popIn .35s cubic-bezier(.17,.67,.35,1.2) forwards;max-width:250px}
+.bday-content{background:#fff;border-radius:13px;padding:16px 18px 14px;text-align:center}
+.bday-emoji{font-size:2.2rem;display:block;margin-bottom:6px}
+.bday-title{font-family:'Boogaloo',cursive;font-size:1.3rem;color:#e94560;margin-bottom:6px;line-height:1.2}
+.bday-details{font-size:.78rem;color:#333;line-height:1.6;font-weight:700}
+.bday-details .highlight{color:#e94560;font-size:.85rem}
+.bday-close{margin-top:10px;font-size:.62rem;color:rgba(0,0,0,.35)}
+.confetti-row{font-size:1.2rem;letter-spacing:4px;margin-bottom:6px}
+
+.counter{position:absolute;bottom:6px;right:14px;font-family:'Boogaloo',cursive;color:rgba(255,255,255,.6);font-size:.85rem;letter-spacing:1px;z-index:3}
+
+/* ── Controls ── */
+.controls{display:flex;align-items:center;justify-content:space-between;margin-top:18px;padding:0 20px}
+.shutter-ring{width:70px;height:70px;border-radius:50%;border:4px solid #555;display:flex;align-items:center;justify-content:center}
+.shutter-btn{width:54px;height:54px;border-radius:50%;background:var(--accent);border:none;cursor:pointer;box-shadow:0 0 0 3px rgba(233,69,96,.3),0 4px 16px rgba(233,69,96,.5);transition:transform .1s,box-shadow .1s}
+.shutter-btn:hover{transform:scale(1.07);box-shadow:0 0 0 7px rgba(233,69,96,.25),0 4px 22px rgba(233,69,96,.6)}
+.shutter-btn:active{transform:scale(.93)}
+.ctrl-side{width:40px;height:40px;border-radius:50%;border:2px solid #444;background:transparent;cursor:pointer;color:#888;font-size:1.1rem;display:flex;align-items:center;justify-content:center;transition:color .2s,border-color .2s}
+.ctrl-side:hover{color:#fff;border-color:#888}
+.ctrl-side.active{color:#FFD93D;border-color:#FFD93D}
+
+.gallery-strip{display:flex;gap:8px;margin-top:14px;height:52px;align-items:center;justify-content:center}
+.thumb{width:44px;height:44px;border-radius:6px;border:2px solid #333;overflow:hidden;flex-shrink:0;cursor:pointer;transition:border-color .2s,transform .2s}
+.thumb:hover{border-color:var(--accent);transform:scale(1.1)}
+.thumb canvas{width:100%;height:100%;display:block}
+
+.hint-text{color:rgba(255,255,255,.3);font-size:.72rem;margin-top:8px;letter-spacing:1px;text-align:center}
+
+/* ── Permission modal ── */
+#permModal{position:fixed;inset:0;background:rgba(0,0,0,.88);display:flex;align-items:center;justify-content:center;z-index:200;padding:20px}
+.perm-box{background:#16213e;border:2px solid var(--accent);border-radius:24px;padding:36px 28px 28px;max-width:310px;width:100%;text-align:center;box-shadow:0 0 50px rgba(233,69,96,.25);animation:slideUp .35s ease-out}
+@keyframes slideUp{from{transform:translateY(28px);opacity:0}to{transform:translateY(0);opacity:1}}
+.perm-icon{font-size:3.2rem;display:block;margin-bottom:12px}
+.perm-title{font-family:'Boogaloo',cursive;font-size:1.7rem;color:#fff;margin-bottom:10px}
+.perm-body{color:rgba(255,255,255,.68);font-size:.88rem;line-height:1.55;margin-bottom:24px}
+.perm-body strong{color:var(--accent)}
+.perm-btns{display:flex;gap:10px;justify-content:center}
+.btn-allow{background:var(--accent);color:#fff;border:none;border-radius:50px;padding:11px 28px;font-family:'Boogaloo',cursive;font-size:1.1rem;cursor:pointer;box-shadow:0 4px 16px rgba(233,69,96,.45);transition:transform .12s}
+.btn-allow:hover{transform:scale(1.05)}
+.btn-allow:active{transform:scale(.95)}
+.btn-skip{background:transparent;color:rgba(255,255,255,.45);border:1px solid rgba(255,255,255,.2);border-radius:50px;padding:11px 18px;font-family:'Nunito',sans-serif;font-size:.88rem;cursor:pointer;transition:color .2s}
+.btn-skip:hover{color:rgba(255,255,255,.8)}
+
+/* style toggle pill */
+.style-label{color:rgba(255,255,255,.45);font-size:.7rem;text-align:center;margin-top:6px;letter-spacing:.5px}
+</style>
+</head>
+<body>
+
+<!-- Permission modal -->
+<div id="permModal">
+  <div class="perm-box">
+    <span class="perm-icon">🎨</span>
+    <div class="perm-title">Cartoon Selfie!</div>
+    <div class="perm-body">
+      Use your <strong>front camera</strong> — we'll turn your real face into a
+      hilarious cartoon that <em>still looks like you!</em> 🖼️<br><br>
+      Nothing is recorded or uploaded. Pure on-device magic ✨
+    </div>
+    <div class="perm-btns">
+      <button class="btn-allow" onclick="requestCamera()">📸 Allow Camera</button>
+      <button class="btn-skip"  onclick="skipCamera()">No thanks</button>
+    </div>
+  </div>
+</div>
+
+<h1>🎨 Cartoon Selfie!</h1>
+
+<div class="phone">
+  <div class="notch"></div>
+  <div class="screen" id="screen">
+
+    <video id="liveVideo" autoplay playsinline muted></video>
+    <canvas id="liveCanvas"></canvas>
+
+    <div id="fallbackFeed">
+      <svg class="live-person" viewBox="0 0 200 320" xmlns="http://www.w3.org/2000/svg" id="livePerson"></svg>
+    </div>
+
+    <div class="grid-overlay"></div>
+    <div class="brackets">
+      <div class="bracket tl"></div><div class="bracket tr"></div>
+      <div class="bracket bl"></div><div class="bracket br"></div>
+    </div>
+
+    <div id="camStatus"></div>
+    <div class="counter" id="counter"></div>
+    <div class="flash-overlay" id="flashOverlay"></div>
+
+    <!-- Cartoon photo popup -->
+    <div class="photo-popup" id="photoPopup">
+      <div class="photo-frame" onclick="closePhoto()">
+        <canvas id="snapCanvas" width="220" height="220"></canvas>
+        <div class="photo-caption" id="photoCaption">✨ Toon'd! ✨</div>
+        <div class="tap-hint">tap to close</div>
+      </div>
+    </div>
+
+    <!-- Birthday card popup -->
+    <div id="bdayCard">
+      <div class="bday-inner" onclick="closeBday()">
+        <div class="bday-content">
+          <div class="confetti-row">🎉🎂🎈🎊🎁</div>
+          <span class="bday-emoji">🥳</span>
+          <div class="bday-title">You're Invited!</div>
+          <div class="bday-details">
+            Come celebrate<br>
+            <span class="highlight">Kaustubh's 4th Birthday! 🎂</span><br><br>
+            📅 <strong>Sunday, March 1</strong><br>
+            📍 <strong>Brigade Cornerstone<br>Utopia Clubhouse</strong><br>
+            🕕 <strong>6 PM onwards</strong><br><br>
+            Don't miss the fun! 🎈
+          </div>
+          <div class="bday-close">tap to close</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="controls">
+    <button class="ctrl-side" id="styleBtn" onclick="cycleStyle()" title="Change cartoon style">🎨</button>
+    <div class="shutter-ring">
+      <button class="shutter-btn" onclick="takeSelfie()" title="Snap!"></button>
+    </div>
+    <button class="ctrl-side" onclick="toggleCartoonPreview()" id="previewBtn" title="Toggle live cartoon">👁️</button>
+  </div>
+</div>
+<div class="style-label" id="styleLabel">Style: Comic Pop</div>
+
+<div class="gallery-strip" id="galleryStrip"></div>
+<div class="hint-text">🎨 tap 👁️ to see live cartoon preview</div>
+
+<script>
+/* ═══════════════════════════════════════
+   STATE
+═══════════════════════════════════════ */
+const video       = document.getElementById('liveVideo');
+const liveCanvas  = document.getElementById('liveCanvas');
+const liveCtx     = liveCanvas.getContext('2d', {willReadFrequently: true});
+const snapCanvas  = document.getElementById('snapCanvas');
+const snapCtx     = snapCanvas.getContext('2d', {willReadFrequently: true});
+const fallback    = document.getElementById('fallbackFeed');
+const camStatus   = document.getElementById('camStatus');
+
+let usingCam         = false;
+let liveCartoon      = false;   // toggle live preview
+let snapCount        = 0;
+let animFrame        = null;
+let bdayShown        = false;
+
+// Cartoon styles
+const STYLES = ['comic','watercolor','neon','sketch','vintage'];
+const STYLE_LABELS = ['Comic Pop','Watercolor Dream','Neon Glow','Pencil Sketch','Vintage Filter'];
+let styleIdx = 0;
+
+function rnd(a,b){return Math.random()*(b-a)+a}
+function rndI(a,b){return Math.floor(rnd(a,b+1))}
+function pick(arr){return arr[rndI(0,arr.length-1)]}
+
+const captions = ['🎨 Toon\'d!','😂 Iconic!','🌟 Masterpiece!','🦄 Legendary!',
+                  '💥 Bam!','🎭 Starring You!','🤩 Main Character!','🔥 Fire!'];
+
+/* ═══════════════════════════════════════
+   STATUS
+═══════════════════════════════════════ */
+function setStatus(msg, persist=false){
+  camStatus.style.opacity='1';
+  camStatus.textContent=msg;
+  if(!persist) setTimeout(()=>{camStatus.style.opacity='0'},2800);
+}
+
+/* ═══════════════════════════════════════
+   CAMERA
+═══════════════════════════════════════ */
+async function requestCamera(){
+  document.getElementById('permModal').style.display='none';
+  setStatus('📷 Starting camera…',true);
+
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
+    goFallback('⚠️ Camera API not available'); return;
+  }
+  try{
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video:{facingMode:{ideal:'user'},width:{ideal:640},height:{ideal:480}},
+      audio:false
+    });
+    video.srcObject = stream;
+    let ready=false;
+    function onReady(){
+      if(ready)return; ready=true;
+      video.play().then(()=>{
+        // size the live canvas to match screen
+        liveCanvas.width  = 296;
+        liveCanvas.height = 420;
+        video.style.display='block';  // hidden but used as source
+        video.style.opacity='0';      // keep in DOM but invisible
+        usingCam=true;
+        setStatus('🟢 Camera live — tap 👁️ for cartoon preview');
+        startLiveLoop();
+      }).catch(e=>goFallback('⚠️ Play failed: '+e.message));
+    }
+    video.onloadedmetadata=onReady;
+    video.oncanplay=onReady;
+    video.onerror=()=>goFallback('⚠️ Video error');
+    setTimeout(()=>{if(!usingCam&&!ready)goFallback('⏱️ Timed out')},6000);
+  }catch(err){
+    const m=err.name==='NotAllowedError'?'🚫 Permission denied'
+            :err.name==='NotFoundError'?'🔍 No camera found'
+            :err.name==='NotReadableError'?'🔒 Camera busy'
+            :'⚠️ Camera unavailable';
+    goFallback(m+' – virtual mode');
+  }
+}
+
+function skipCamera(){
+  document.getElementById('permModal').style.display='none';
+  goFallback('🎭 Virtual cartoon mode');
+}
+
+function goFallback(msg){
+  if(video.srcObject) video.srcObject.getTracks().forEach(t=>t.stop());
+  video.srcObject=null;
+  video.style.display='none';
+  liveCanvas.style.display='none';
+  fallback.style.display='flex';
+  usingCam=false;
+  if(animFrame){cancelAnimationFrame(animFrame);animFrame=null;}
+  setStatus(msg);
+}
+
+/* ═══════════════════════════════════════
+   LIVE CARTOON LOOP
+═══════════════════════════════════════ */
+function startLiveLoop(){
+  // show plain video by default, canvas cartoon when toggled
+  liveCanvas.style.display = liveCartoon ? 'block' : 'none';
+  video.style.display      = 'block';
+  video.style.opacity      = liveCartoon ? '0' : '1';
+
+  function loop(){
+    if(!usingCam){return;}
+    if(liveCartoon && video.readyState>=2){
+      liveCanvas.style.display='block';
+      video.style.opacity='0';
+      // draw mirrored frame then apply cartoon
+      liveCtx.save();
+      liveCtx.translate(liveCanvas.width,0);
+      liveCtx.scale(-1,1);
+      liveCtx.drawImage(video,0,0,liveCanvas.width,liveCanvas.height);
+      liveCtx.restore();
+      applyCartoonFilter(liveCtx,liveCanvas.width,liveCanvas.height,STYLES[styleIdx],false);
+      drawLiveStickers(liveCtx,liveCanvas.width,liveCanvas.height);
+    } else {
+      liveCanvas.style.display='none';
+      video.style.opacity='1';
+    }
+    animFrame=requestAnimationFrame(loop);
+  }
+  if(animFrame) cancelAnimationFrame(animFrame);
+  animFrame=requestAnimationFrame(loop);
+}
+
+function toggleCartoonPreview(){
+  liveCartoon=!liveCartoon;
+  document.getElementById('previewBtn').classList.toggle('active',liveCartoon);
+  if(usingCam) startLiveLoop();
+}
+
+/* ═══════════════════════════════════════
+   CARTOON FILTER ENGINE
+   Takes a ctx, applies style in-place
+═══════════════════════════════════════ */
+function applyCartoonFilter(ctx, w, h, style, isSnap){
+  const imgData = ctx.getImageData(0,0,w,h);
+  const d = imgData.data;
+
+  if(style==='comic'){
+    posterize(d, 5);
+    boost(d, 1.3, 1.1, 0.95);
+  } else if(style==='watercolor'){
+    posterize(d, 6);
+    boost(d, 1.0, 1.05, 1.1);
+    soften(d, w, h);
+  } else if(style==='neon'){
+    posterize(d, 4);
+    boost(d, 0.7, 1.4, 1.5);
+    neonShift(d);
+  } else if(style==='sketch'){
+    grayscale(d);
+    sketchEffect(d, w, h);
+  } else if(style==='vintage'){
+    posterize(d, 5);
+    vintageGrade(d);
+  }
+
+  ctx.putImageData(imgData, 0, 0);
+
+  // Add ink outline (only on snap for perf)
+  if(isSnap || style==='comic' || style==='sketch'){
+    addInkOutline(ctx, w, h, style);
+  }
+
+  // Style-specific overlays
+  if(style==='neon' && isSnap){
+    addNeonGlow(ctx, w, h);
+  }
+  if(style==='vintage' && isSnap){
+    addVignetteGrain(ctx, w, h);
+  }
+  if(style==='watercolor' && isSnap){
+    addWatercolorTexture(ctx, w, h);
+  }
+}
+
+/* ── Pixel ops ── */
+function posterize(d, levels){
+  const step = 255/(levels-1);
+  for(let i=0;i<d.length;i+=4){
+    d[i]   = Math.round(d[i]/step)*step;
+    d[i+1] = Math.round(d[i+1]/step)*step;
+    d[i+2] = Math.round(d[i+2]/step)*step;
+  }
+}
+function boost(d, r, g, b){
+  for(let i=0;i<d.length;i+=4){
+    d[i]   = Math.min(255, d[i]*r);
+    d[i+1] = Math.min(255, d[i+1]*g);
+    d[i+2] = Math.min(255, d[i+2]*b);
+  }
+}
+function grayscale(d){
+  for(let i=0;i<d.length;i+=4){
+    const g=d[i]*.299+d[i+1]*.587+d[i+2]*.114;
+    d[i]=d[i+1]=d[i+2]=g;
+  }
+}
+function soften(d, w, h){
+  // simple box blur 1 pass
+  const out = new Uint8ClampedArray(d);
+  for(let y=1;y<h-1;y++){
+    for(let x=1;x<w-1;x++){
+      const idx=(y*w+x)*4;
+      for(let c=0;c<3;c++){
+        out[idx+c]=(
+          d[idx+c]+d[idx-4+c]+d[idx+4+c]+
+          d[idx-w*4+c]+d[idx+w*4+c])/5;
+      }
+    }
+  }
+  d.set(out);
+}
+function sketchEffect(d, w, h){
+  const copy=new Uint8ClampedArray(d);
+  // invert + darken
+  for(let i=0;i<d.length;i+=4){
+    d[i]=d[i+1]=d[i+2]=
+      Math.min(255,copy[i]*1.6>200?255:copy[i]*0.5);
+  }
+}
+function neonShift(d){
+  for(let i=0;i<d.length;i+=4){
+    const r=d[i],g=d[i+1],b=d[i+2];
+    d[i]=Math.min(255,b*1.2);
+    d[i+1]=Math.min(255,r*0.8);
+    d[i+2]=Math.min(255,g*1.3);
+  }
+}
+function vintageGrade(d){
+  for(let i=0;i<d.length;i+=4){
+    d[i]  =Math.min(255, d[i]*1.15+15);
+    d[i+1]=Math.min(255, d[i+1]*0.95+10);
+    d[i+2]=Math.min(255, d[i+2]*0.8);
+  }
+}
+
+/* ── Canvas overlay effects ── */
+function addInkOutline(ctx, w, h, style){
+  // Use source-over with multiply to darken edges
+  ctx.globalCompositeOperation='multiply';
+  ctx.globalAlpha= style==='sketch'?0.6:0.25;
+  // Draw edge map using a temp canvas
+  const tmp=document.createElement('canvas');
+  tmp.width=w; tmp.height=h;
+  const tctx=tmp.getContext('2d',{willReadFrequently:true});
+  tctx.drawImage(ctx.canvas,0,0);
+  const id=tctx.getImageData(0,0,w,h);
+  const od=tctx.createImageData(w,h);
+  const s=id.data, e=od.data;
+  for(let y=1;y<h-1;y++){
+    for(let x=1;x<w-1;x++){
+      const idx=(y*w+x)*4;
+      const dx=s[idx+4]-s[idx-4];
+      const dy=s[(y+1)*w*4+x*4]-s[(y-1)*w*4+x*4];
+      const mag=Math.sqrt(dx*dx+dy*dy);
+      const v=mag>30?0:255;
+      e[idx]=e[idx+1]=e[idx+2]=v; e[idx+3]=255;
+    }
+  }
+  tctx.putImageData(od,0,0);
+  ctx.drawImage(tmp,0,0);
+  ctx.globalCompositeOperation='source-over';
+  ctx.globalAlpha=1;
+}
+
+function addNeonGlow(ctx, w, h){
+  ctx.globalCompositeOperation='screen';
+  const g=ctx.createRadialGradient(w/2,h/2,w*0.1,w/2,h/2,w*0.7);
+  g.addColorStop(0,'rgba(180,0,255,0.18)');
+  g.addColorStop(0.5,'rgba(0,200,255,0.10)');
+  g.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=g; ctx.fillRect(0,0,w,h);
+  ctx.globalCompositeOperation='source-over';
+}
+
+function addVignetteGrain(ctx, w, h){
+  // grain
+  ctx.globalAlpha=0.06;
+  for(let i=0;i<2000;i++){
+    ctx.fillStyle=`rgba(255,255,255,${Math.random()})`;
+    ctx.fillRect(rnd(0,w),rnd(0,h),1,1);
+  }
+  // vignette
+  ctx.globalAlpha=1;
+  const v=ctx.createRadialGradient(w/2,h/2,h*0.35,w/2,h/2,h*0.75);
+  v.addColorStop(0,'rgba(0,0,0,0)');
+  v.addColorStop(1,'rgba(30,15,5,0.55)');
+  ctx.fillStyle=v; ctx.fillRect(0,0,w,h);
+}
+
+function addWatercolorTexture(ctx, w, h){
+  ctx.globalAlpha=0.07;
+  ctx.globalCompositeOperation='multiply';
+  for(let i=0;i<12;i++){
+    ctx.beginPath();
+    ctx.arc(rnd(0,w),rnd(0,h),rnd(30,90),0,Math.PI*2);
+    ctx.fillStyle=`hsla(${rndI(180,280)},60%,70%,0.5)`;
+    ctx.fill();
+  }
+  ctx.globalCompositeOperation='source-over';
+  ctx.globalAlpha=1;
+}
+
+/* ── Live sticker overlay (lightweight, no outline) ── */
+const liveStickers=['✨','⭐','💫','🌟'];
+let stickerAngle=0;
+function drawLiveStickers(ctx,w,h){
+  stickerAngle=(stickerAngle+0.8)%360;
+  ctx.font='18px serif';
+  ctx.globalAlpha=0.7;
+  ctx.fillText(liveStickers[Math.floor(stickerAngle/90)%4], 10, 28);
+  ctx.globalAlpha=1;
+}
+
+/* ═══════════════════════════════════════
+   SNAP
+═══════════════════════════════════════ */
+function takeSelfie(){
+  const flash=document.getElementById('flashOverlay');
+  flash.classList.remove('flash');
+  void flash.offsetWidth;
+  flash.classList.add('flash');
+
+  setTimeout(()=>{
+    if(usingCam && video.readyState>=2){
+      snapFromCamera();
+    } else {
+      snapVirtual();
+    }
+    showPhotoPopup();
+    schedBdayCard();
+  },140);
+}
+
+function snapFromCamera(){
+  // Draw mirrored video frame to snap canvas
+  snapCtx.save();
+  snapCtx.translate(220,0);
+  snapCtx.scale(-1,1);
+  snapCtx.drawImage(video,0,0,220,220);
+  snapCtx.restore();
+
+  // Apply selected cartoon style
+  applyCartoonFilter(snapCtx,220,220,STYLES[styleIdx],true);
+
+  // Fun overlays on top
+  drawSnapStickers(snapCtx,220,220);
+}
+
+function snapVirtual(){
+  drawFallbackCartoon(snapCtx,220,220);
+}
+
+/* ─── Snap sticker overlays ─── */
+function drawSnapStickers(ctx, w, h){
+  const style=STYLES[styleIdx];
+
+  // Coloured border
+  const borderColors={
+    comic:  ['#FF6B6B','#FFD93D','#4ECDC4'],
+    watercolor:['#a8d8ea','#aa96da','#fcbad3'],
+    neon:   ['#f72585','#7209b7','#3a0ca3'],
+    sketch: ['#333','#555','#777'],
+    vintage:['#c9a84c','#a07040','#705030']
+  };
+  const cols=borderColors[style]||borderColors.comic;
+  for(let i=0;i<3;i++){ctx.strokeStyle=cols[i];ctx.lineWidth=6;ctx.strokeRect(i*4,i*4,w-i*8,h-i*8);}
+
+  // Emoji stickers
+  const stickers=['⭐','🌟','💥','✨','🎉','🦄','👾','🔥','💖','😎','🌈','🎊'];
+  ctx.font='24px serif';
+  for(let i=0;i<3+rndI(0,3);i++){
+    ctx.globalAlpha=0.9;
+    ctx.fillText(pick(stickers),rnd(5,w-34),rnd(26,h-10));
+  }
+  ctx.globalAlpha=1;
+
+  // Word bubble
+  const words=['SNAP!','YAS!','ICONIC','SLAY','OMG!','WOW!','LIT!','TOON\'D!'];
+  ctx.font='bold 16px Boogaloo,cursive';
+  const txt=pick(words);
+  const tw=ctx.measureText(txt).width;
+  const bx=rnd(10,w-tw-24), by=rnd(h*.55,h-44);
+  const bubbleColors={comic:'#FFD93D',watercolor:'#fcbad3',neon:'#f72585',sketch:'#eee',vintage:'#c9a84c'};
+  ctx.fillStyle=bubbleColors[style]||'#FFD93D';
+  ctx.beginPath(); ctx.roundRect(bx-8,by-22,tw+16,30,8); ctx.fill();
+  ctx.fillStyle=style==='neon'?'#fff':'#111';
+  ctx.fillText(txt,bx,by);
+}
+
+/* ─── Full virtual cartoon (no camera) ─── */
+function rndArr(arr){return arr[rndI(0,arr.length-1)]}
+const SKIN=['#FFDBB5','#F4A460','#D2691E','#8B4513','#FFE0BD','#FFCD94'];
+const HAIR=['#1a1a1a','#8B0000','#4169E1','#FF6347','#32CD32','#FF1493','#FFD700','#9400D3'];
+const BGPAIRS=[['#FF6B6B','#FFA07A'],['#4ECDC4','#45B7D1'],['#A8E6CF','#DCEDC1'],['#FFD93D','#FF6B6B'],['#C3A6FF','#F8BFCF'],['#84FAB0','#8FD3F4']];
+function dk(hex,a=40){const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);return`rgb(${Math.max(0,r-a)},${Math.max(0,g-a)},${Math.max(0,b-a)})`}
+function lk(hex,a=40){const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);return`rgb(${Math.min(255,r+a)},${Math.min(255,g+a)},${Math.min(255,b+a)})`}
+
+function drawFallbackCartoon(ctx,w,h){
+  const skin=rndArr(SKIN),hair=rndArr(HAIR),[bg1,bg2]=rndArr(BGPAIRS);
+  const expr=pick(['happy','excited','cool','surprised','silly']);
+  const acc=pick(['glasses','hat','bow','none','none','none']);
+  const eyeC=pick(['#4169E1','#228B22','#8B4513','#4B0082']);
+
+  const gr=ctx.createLinearGradient(0,0,w,h);gr.addColorStop(0,bg1);gr.addColorStop(1,bg2);
+  ctx.fillStyle=gr;ctx.fillRect(0,0,w,h);
+  ctx.globalAlpha=.15;
+  for(let i=0;i<6;i++){ctx.fillStyle=i%2?'#fff':bg2;ctx.beginPath();const cx2=rnd(0,w),cy2=rnd(0,h),s=rnd(18,70);i%3===0?ctx.arc(cx2,cy2,s,0,Math.PI*2):i%3===1?ctx.rect(cx2-s/2,cy2-s/2,s,s):(ctx.moveTo(cx2,cy2-s),ctx.lineTo(cx2+s,cy2+s),ctx.lineTo(cx2-s,cy2+s),ctx.closePath());ctx.fill();}
+  ctx.globalAlpha=1;
+
+  const cx=w/2,cy=h/2,hw=85+rndI(-8,8),hh=98+rndI(-8,8);
+  ctx.fillStyle=skin;ctx.fillRect(cx-18,cy+68,36,48);
+  const sc=pick(['#E74C3C','#3498DB','#2ECC71','#9B59B6','#F39C12']);
+  ctx.fillStyle=sc;ctx.beginPath();ctx.moveTo(cx-80,h+10);ctx.lineTo(cx+80,h+10);ctx.lineTo(cx+50,cy+88);ctx.lineTo(cx-50,cy+88);ctx.closePath();ctx.fill();
+  ctx.fillStyle=skin;rrect(ctx,cx-hw/2,cy-hh/2-10,hw,hh,26);ctx.fill();
+  [cx-hw/2-4,cx+hw/2+4].forEach(ex=>{ctx.beginPath();ctx.ellipse(ex,cy+2,10,14,0,0,Math.PI*2);ctx.fill();});
+  drawHairV(ctx,cx,cy,hw,hh,hair);
+  drawBrowsV(ctx,cx,cy,expr,skin);
+  drawEyesV(ctx,cx,cy,expr,eyeC);
+  ctx.fillStyle=dk(skin,22);Math.random()>.5?(ctx.beginPath(),ctx.moveTo(cx,cy+10),ctx.lineTo(cx-8,cy+27),ctx.lineTo(cx+8,cy+27),ctx.closePath(),ctx.fill()):(ctx.beginPath(),ctx.arc(cx,cy+20,7,0,Math.PI*2),ctx.fill());
+  drawMouthV(ctx,cx,cy,expr);
+  ctx.globalAlpha=.2;ctx.fillStyle='#FF6B8A';
+  [cx-32,cx+32].forEach(ex=>{ctx.beginPath();ctx.ellipse(ex,cy+27,14,9,0,0,Math.PI*2);ctx.fill();});
+  ctx.globalAlpha=1;
+  if(acc==='glasses')drawGlassesV(ctx,cx,cy,hw);
+  else if(acc==='hat')drawHatV(ctx,cx,cy,hw,hh);
+  else if(acc==='bow')drawBowV(ctx,cx,cy,hw,hh);
+  drawSnapStickers(ctx,w,h);
+}
+
+function rrect(ctx,x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);ctx.closePath();}
+function drawHairV(ctx,cx,cy,hw,hh,hair){ctx.fillStyle=hair;const top=cy-hh/2-10,s=rndI(0,3);if(s===0){ctx.fillRect(cx-hw/2-5,top-18,hw+10,26);}else if(s===1){ctx.beginPath();const n=5+rndI(0,3);for(let i=0;i<n;i++){const bx=(cx-hw/2)+(hw/(n-1))*i;ctx.lineTo(bx,top);ctx.lineTo(bx+hw/(n*2),top-20-rnd(0,14));}ctx.lineTo(cx+hw/2,top);ctx.closePath();ctx.fill();}else if(s===2){ctx.beginPath();ctx.ellipse(cx,top-4,hw/2+8,22,0,Math.PI,0);ctx.fill();ctx.fillRect(cx-hw/2-6,top,15,hh+16);ctx.fillRect(cx+hw/2-9,top,15,hh+16);}else{for(let i=0;i<7;i++){ctx.beginPath();ctx.arc(cx-hw/2+(i*hw/6),top-rnd(0,9),16+rnd(0,6),0,Math.PI*2);ctx.fill();}}}
+function drawBrowsV(ctx,cx,cy,expr,skin){ctx.strokeStyle=dk(skin,55);ctx.lineWidth=4;ctx.lineCap='round';const ey=cy-17,ex=cx-20;if(expr==='surprised'){ctx.beginPath();ctx.moveTo(ex-10,ey-9);ctx.quadraticCurveTo(ex,ey-16,ex+10,ey-9);ctx.stroke();ctx.beginPath();ctx.moveTo(cx+10,ey-9);ctx.quadraticCurveTo(cx+20,ey-16,cx+30,ey-9);ctx.stroke();}else if(expr==='cool'){ctx.beginPath();ctx.moveTo(ex-10,ey);ctx.lineTo(ex+10,ey);ctx.stroke();ctx.beginPath();ctx.moveTo(cx+10,ey);ctx.lineTo(cx+30,ey);ctx.stroke();}else{ctx.beginPath();ctx.moveTo(ex-10,ey);ctx.quadraticCurveTo(ex,ey-7,ex+10,ey);ctx.stroke();ctx.beginPath();ctx.moveTo(cx+10,ey);ctx.quadraticCurveTo(cx+20,ey-7,cx+30,ey);ctx.stroke();}}
+function drawEyesV(ctx,cx,cy,expr,eyeC){const ey=cy-4;for(const ex of[cx-22,cx+22]){if(expr==='cool'){ctx.fillStyle='#111';ctx.fillRect(ex-13,ey-10,26,18);ctx.strokeStyle='#888';ctx.lineWidth=2;ctx.strokeRect(ex-13,ey-10,26,18);}else{ctx.fillStyle='white';ctx.beginPath();ctx.ellipse(ex,ey,13,13,0,0,Math.PI*2);ctx.fill();ctx.fillStyle=eyeC;ctx.beginPath();ctx.ellipse(ex,ey,8,8,0,0,Math.PI*2);ctx.fill();ctx.fillStyle='#111';ctx.beginPath();ctx.ellipse(ex+1,ey+1,4,4,0,0,Math.PI*2);ctx.fill();ctx.fillStyle='white';ctx.beginPath();ctx.ellipse(ex+4,ey-4,2.5,2.5,0,0,Math.PI*2);ctx.fill();}}if(expr==='cool'){ctx.strokeStyle='#888';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(cx-9,ey-1);ctx.lineTo(cx+9,ey-1);ctx.stroke();}}
+function drawMouthV(ctx,cx,cy,expr){const my=cy+37;ctx.strokeStyle='#c0392b';ctx.lineWidth=3;ctx.lineCap='round';ctx.lineJoin='round';ctx.fillStyle='#c0392b';if(expr==='happy'){ctx.beginPath();ctx.moveTo(cx-18,my);ctx.quadraticCurveTo(cx,my+16,cx+18,my);ctx.stroke();}else if(expr==='excited'){ctx.beginPath();ctx.moveTo(cx-18,my);ctx.quadraticCurveTo(cx,my+16,cx+18,my);ctx.quadraticCurveTo(cx,my+26,cx-18,my);ctx.fill();ctx.fillStyle='white';ctx.beginPath();ctx.moveTo(cx-14,my+2);ctx.quadraticCurveTo(cx,my+12,cx+14,my+2);ctx.lineTo(cx+14,my+8);ctx.quadraticCurveTo(cx,my+16,cx-14,my+8);ctx.closePath();ctx.fill();}else if(expr==='surprised'){ctx.fillStyle='#333';ctx.beginPath();ctx.ellipse(cx,my+5,13,15,0,0,Math.PI*2);ctx.fill();}else if(expr==='silly'){ctx.fillStyle='#FF6B8A';ctx.beginPath();ctx.arc(cx,my+11,13,0,Math.PI);ctx.fill();ctx.fillStyle='#E75480';ctx.beginPath();ctx.arc(cx,my+16,9,0,Math.PI);ctx.fill();ctx.beginPath();ctx.moveTo(cx-13,my+1);ctx.lineTo(cx+13,my+1);ctx.stroke();}else{ctx.beginPath();ctx.moveTo(cx-14,my);ctx.lineTo(cx+14,my);ctx.stroke();}}
+function drawGlassesV(ctx,cx,cy,hw){const ey=cy-4,col=pick(['#ff0','#f0f','#0ff','#f60']);ctx.strokeStyle=col;ctx.lineWidth=3;for(const lx of[cx-22,cx+22]){ctx.beginPath();ctx.rect(lx-13,ey-11,26,20);ctx.stroke();}ctx.beginPath();ctx.moveTo(cx-9,ey-1);ctx.lineTo(cx+9,ey-1);ctx.stroke();ctx.beginPath();ctx.moveTo(cx-35,ey-1);ctx.lineTo(cx-hw/2-8,ey);ctx.stroke();ctx.beginPath();ctx.moveTo(cx+35,ey-1);ctx.lineTo(cx+hw/2+8,ey);ctx.stroke();}
+function drawHatV(ctx,cx,cy,hw,hh){const top=cy-hh/2-10,hc=pick(['#333','#E74C3C','#2C3E50','#8B0000']);ctx.fillStyle=hc;ctx.beginPath();ctx.ellipse(cx,top+2,hw/2+18,10,0,0,Math.PI*2);ctx.fill();ctx.fillRect(cx-hw/2+4,top-42,hw-8,46);ctx.fillStyle=lk(hc,28);ctx.fillRect(cx-hw/2+4,top-10,hw-8,7);}
+function drawBowV(ctx,cx,cy,hw,hh){const top=cy-hh/2-10,bc=pick(['#FF69B4','#FF1493','#9400D3','#1E90FF']);ctx.fillStyle=bc;const bx=cx+hw/2-14,by=top-16;ctx.beginPath();ctx.moveTo(bx,by);ctx.lineTo(bx-15,by-11);ctx.lineTo(bx-15,by+11);ctx.closePath();ctx.fill();ctx.beginPath();ctx.moveTo(bx,by);ctx.lineTo(bx+15,by-11);ctx.lineTo(bx+15,by+11);ctx.closePath();ctx.fill();ctx.fillStyle=lk(bc,38);ctx.beginPath();ctx.arc(bx,by,5,0,Math.PI*2);ctx.fill();}
+
+/* ═══════════════════════════════════════
+   PHOTO POPUP
+═══════════════════════════════════════ */
+function showPhotoPopup(){
+  document.getElementById('photoCaption').textContent=captions[snapCount%captions.length];
+  document.getElementById('photoPopup').classList.add('show');
+  snapCount++;
+  document.getElementById('counter').textContent=`${snapCount} snap${snapCount!==1?'s':''}`;
+  addThumb();
+}
+function closePhoto(){
+  document.getElementById('photoPopup').classList.remove('show');
+  // Show bday card after 1st snap if not shown
+  if(!bdayShown){ setTimeout(()=>{showBdayCard();},400); }
+}
+
+/* ═══════════════════════════════════════
+   BIRTHDAY CARD
+═══════════════════════════════════════ */
+function schedBdayCard(){/* triggered on closePhoto after 1st snap */}
+function showBdayCard(){
+  bdayShown=true;
+  document.getElementById('bdayCard').classList.add('show');
+}
+function closeBday(){
+  document.getElementById('bdayCard').classList.remove('show');
+}
+
+/* ═══════════════════════════════════════
+   GALLERY THUMBNAILS
+═══════════════════════════════════════ */
+function addThumb(){
+  const strip=document.getElementById('galleryStrip');
+  const thumb=document.createElement('div');
+  thumb.className='thumb';
+  const tc=document.createElement('canvas');
+  tc.width=44;tc.height=44;
+  tc.getContext('2d').drawImage(snapCanvas,0,0,44,44);
+  thumb.appendChild(tc);
+  const snap=snapCanvas.toDataURL();
+  thumb.onclick=()=>{
+    const img=new Image();
+    img.onload=()=>{snapCtx.drawImage(img,0,0,220,220);document.getElementById('photoPopup').classList.add('show');};
+    img.src=snap;
+  };
+  strip.insertBefore(thumb,strip.firstChild);
+  if(strip.children.length>5) strip.removeChild(strip.lastChild);
+}
+
+/* ═══════════════════════════════════════
+   STYLE CYCLE
+═══════════════════════════════════════ */
+function cycleStyle(){
+  styleIdx=(styleIdx+1)%STYLES.length;
+  document.getElementById('styleLabel').textContent='Style: '+STYLE_LABELS[styleIdx];
+  setStatus('🎨 Style: '+STYLE_LABELS[styleIdx]);
+}
+
+/* ═══════════════════════════════════════
+   FALLBACK ANIMATED PERSON
+═══════════════════════════════════════ */
+const hairCols=['#1a1a1a','#8B0000','#4169E1','#FF6347','#32CD32','#FF1493','#FFD700'];
+function updateLivePreview(){
+  const svg=document.getElementById('livePerson');
+  const hair=pick(hairCols);
+  const shirt=pick(['#E74C3C','#3498DB','#2ECC71','#9B59B6','#F39C12']);
+  const skin='#FFD5B4';
+  svg.innerHTML=`<rect x="60" y="220" width="80" height="100" fill="${shirt}" rx="10"/><rect x="72" y="180" width="56" height="50" fill="${skin}"/><ellipse cx="100" cy="150" rx="44" ry="50" fill="${skin}"/><ellipse cx="56" cy="155" rx="10" ry="14" fill="${skin}"/><ellipse cx="144" cy="155" rx="10" ry="14" fill="${skin}"/><ellipse cx="100" cy="108" rx="50" ry="30" fill="${hair}"/><rect x="52" y="100" width="16" height="35" fill="${hair}" rx="8"/><rect x="132" y="100" width="16" height="35" fill="${hair}" rx="8"/><ellipse cx="84" cy="148" rx="10" ry="10" fill="white"/><ellipse cx="116" cy="148" rx="10" ry="10" fill="white"/><ellipse cx="84" cy="148" rx="6" ry="6" fill="#4169E1"/><ellipse cx="116" cy="148" rx="6" ry="6" fill="#4169E1"/><ellipse cx="84" cy="148" rx="3" ry="3" fill="#111"/><ellipse cx="116" cy="148" rx="3" ry="3" fill="#111"/><path d="M88 168 Q100 178 112 168" stroke="#c0392b" stroke-width="3" fill="none" stroke-linecap="round"/>`;
+}
+updateLivePreview();
+setInterval(updateLivePreview,3000);
+</script>
+</body>
+</html>
