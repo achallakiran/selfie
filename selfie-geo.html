@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>📸 Geo Selfie!</title>
+
+<!--
+╔══════════════════════════════════════════════════════╗
+║  CONFIGURABLE MESSAGE — edit anything below!         ║
+╚══════════════════════════════════════════════════════╝
+-->
+<script>
+const CONFIG = {
+  appTitle:    "GEO SELFIE!",
+  hintText:    "▶ PRESS RED BUTTON TO SNAP",
+  msgEmojis:   "🎉🎂🎈🎊🥳",
+  msgTitle:    "You're Invited!",
+  msgLine1:    "Kaustubh's 4th Birthday! 🎂",
+  msgLine2:    "📅 Sunday, March 1",
+  msgLine3:    "📍 Brigade Cornerstone Utopia Clubhouse",
+  msgLine4:    "🕕 6 PM Onwards",
+};
+</script>
+
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Boogaloo&family=VT323&family=Nunito:wght@700&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{
+  background:#0d0d1a;min-height:100vh;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  font-family:'VT323',monospace;overflow:hidden;
+  background-image:
+    repeating-linear-gradient(0deg,transparent,transparent 40px,rgba(0,255,180,.03) 40px,rgba(0,255,180,.03) 41px),
+    repeating-linear-gradient(90deg,transparent,transparent 40px,rgba(0,255,180,.03) 40px,rgba(0,255,180,.03) 41px);
+}
+h1{font-family:'Boogaloo',cursive;color:#00ffb4;font-size:2.2rem;letter-spacing:4px;margin-bottom:12px;
+  text-shadow:0 0 20px #00ffb4,3px 3px 0 #ff2d78}
+
+/* Phone */
+.phone{position:relative;width:320px;background:#111;border-radius:40px;padding:16px 10px 22px;
+  box-shadow:0 0 0 3px #333,0 0 0 5px #00ffb4,0 20px 60px rgba(0,255,180,.15)}
+.notch{width:80px;height:16px;background:#111;border-radius:0 0 12px 12px;margin:0 auto 8px}
+
+/* Screen */
+.screen{position:relative;width:100%;height:400px;border-radius:18px;overflow:hidden;background:#000;border:2px solid #222}
+
+/* Live video — VISIBLE, mirrored */
+#liveVideo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;
+  transform:scaleX(-1);border-radius:16px;display:block;z-index:1}
+
+/* Hidden capture canvas (off-screen) */
+#captureCanvas{display:none}
+
+/* Retro overlays */
+.scanlines{position:absolute;inset:0;z-index:2;pointer-events:none;
+  background:repeating-linear-gradient(to bottom,transparent,transparent 3px,rgba(0,0,0,.15) 3px,rgba(0,0,0,.15) 4px);
+  border-radius:16px}
+.retro-tint{position:absolute;inset:0;z-index:2;pointer-events:none;border-radius:16px;
+  background:linear-gradient(135deg,rgba(255,45,120,.05),rgba(0,255,180,.05));mix-blend-mode:screen}
+
+/* Corner brackets */
+.brackets{position:absolute;inset:10px;pointer-events:none;z-index:4}
+.bracket{position:absolute;width:24px;height:24px;border-color:#00ffb4;border-style:solid}
+.bracket.tl{top:0;left:0;border-width:3px 0 0 3px}
+.bracket.tr{top:0;right:0;border-width:3px 3px 0 0}
+.bracket.bl{bottom:0;left:0;border-width:0 0 3px 3px}
+.bracket.br{bottom:0;right:0;border-width:0 3px 3px 0}
+
+/* HUD */
+.hud-tl{position:absolute;top:10px;left:12px;color:#00ffb4;font-size:.75rem;z-index:4;
+  text-shadow:0 0 6px #00ffb4;animation:blink 1.5s step-end infinite}
+@keyframes blink{50%{opacity:0}}
+.hud-tr{position:absolute;top:10px;right:12px;color:#ff2d78;font-size:.75rem;z-index:4;text-shadow:0 0 6px #ff2d78}
+.hud-count{position:absolute;bottom:8px;right:12px;z-index:4;color:#ffcc00;font-size:.85rem;text-shadow:0 0 6px #ffcc00}
+
+/* No camera */
+#noCamera{position:absolute;inset:0;z-index:1;background:linear-gradient(135deg,#0d0d2e,#1a0a2e,#0a1a1a);
+  display:none;align-items:center;justify-content:center;flex-direction:column;gap:10px;border-radius:16px}
+#noCamera p{color:#00ffb4;font-size:1rem;text-align:center;padding:10px;line-height:1.5}
+
+/* Flash */
+.flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:10;border-radius:16px}
+.flash.go{animation:doFlash .5s ease-out forwards}
+@keyframes doFlash{0%{opacity:1}100%{opacity:0}}
+
+/* Photo popup */
+.photo-popup{position:absolute;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;
+  background:rgba(0,0,0,.75);opacity:0;pointer-events:none;transition:opacity .2s;border-radius:16px}
+.photo-popup.show{opacity:1;pointer-events:all}
+.polaroid{background:#fff;padding:8px 8px 36px;
+  box-shadow:0 8px 40px rgba(0,0,0,.8),0 0 0 1px #eee;
+  cursor:pointer;position:relative;
+  animation:popIn .35s cubic-bezier(.17,.67,.35,1.3) forwards}
+@keyframes popIn{from{transform:scale(.4) rotate(-4deg)}to{transform:scale(1) rotate(-2deg)}}
+#snapCanvas{display:block;width:220px;height:220px}
+.polaroid-caption{position:absolute;bottom:8px;left:0;right:0;text-align:center;
+  font-family:'Boogaloo',cursive;font-size:.95rem;color:#333;letter-spacing:1px}
+
+/* Message popup */
+.msg-popup{position:absolute;inset:0;z-index:30;display:flex;align-items:center;justify-content:center;
+  background:rgba(0,0,0,.88);opacity:0;pointer-events:none;transition:opacity .25s;border-radius:16px}
+.msg-popup.show{opacity:1;pointer-events:all}
+.msg-card{background:linear-gradient(135deg,#1a0030,#001a30);border:3px solid #00ffb4;
+  padding:20px 18px 16px;max-width:238px;text-align:center;cursor:pointer;
+  animation:popIn .35s cubic-bezier(.17,.67,.35,1.3) forwards;box-shadow:0 0 30px rgba(0,255,180,.2)}
+.msg-emoji-row{font-size:1.5rem;letter-spacing:3px;margin-bottom:8px}
+.msg-title{font-family:'Boogaloo',cursive;font-size:1.4rem;color:#ffcc00;margin-bottom:10px;text-shadow:0 0 10px #ffcc00}
+.msg-body{font-family:'Nunito',sans-serif;font-size:.82rem;color:#00ffb4;line-height:1.8}
+.msg-body .hi{color:#ff2d78;font-weight:900;font-size:.9rem}
+.msg-close{font-size:.62rem;color:rgba(255,255,255,.3);margin-top:10px;font-family:monospace}
+
+/* Controls */
+.controls{display:flex;align-items:center;justify-content:center;margin-top:14px}
+.shutter-outer{width:68px;height:68px;border-radius:50%;border:3px solid #00ffb4;
+  box-shadow:0 0 14px #00ffb4,inset 0 0 8px rgba(0,255,180,.1);
+  display:flex;align-items:center;justify-content:center}
+.shutter-btn{width:52px;height:52px;border-radius:50%;background:#ff2d78;border:none;cursor:pointer;
+  box-shadow:0 0 16px #ff2d78,0 0 32px rgba(255,45,120,.4);transition:transform .1s,box-shadow .1s}
+.shutter-btn:hover{transform:scale(1.08);box-shadow:0 0 24px #ff2d78,0 0 48px rgba(255,45,120,.5)}
+.shutter-btn:active{transform:scale(.92)}
+
+/* Gallery */
+.gallery{display:flex;gap:8px;margin-top:12px;align-items:center;justify-content:center;height:50px}
+.thumb{width:42px;height:42px;border-radius:4px;border:2px solid #333;overflow:hidden;flex-shrink:0;cursor:pointer;
+  transition:border-color .2s,transform .2s;box-shadow:0 0 8px rgba(0,255,180,.1)}
+.thumb:hover{border-color:#00ffb4;transform:scale(1.12);box-shadow:0 0 12px #00ffb4}
+.thumb canvas{width:100%;height:100%;display:block}
+.hint{color:rgba(0,255,180,.3);font-size:.9rem;margin-top:6px;text-align:center;letter-spacing:2px}
+
+/* Permission modal */
+#permModal{position:fixed;inset:0;background:rgba(0,0,0,.92);
+  display:flex;align-items:center;justify-content:center;z-index:100;padding:20px}
+.perm-box{background:#0d0d1a;border:2px solid #00ffb4;box-shadow:0 0 30px rgba(0,255,180,.2);
+  border-radius:4px;padding:34px 28px 28px;max-width:300px;width:100%;text-align:center;
+  animation:slideUp .3s ease-out}
+@keyframes slideUp{from{transform:translateY(24px);opacity:0}to{transform:translateY(0);opacity:1}}
+.perm-icon{font-size:3rem;display:block;margin-bottom:12px}
+.perm-title{font-family:'Boogaloo',cursive;font-size:1.8rem;color:#00ffb4;margin-bottom:8px;text-shadow:0 0 12px #00ffb4}
+.perm-body{color:rgba(255,255,255,.65);font-family:'Nunito',sans-serif;font-size:.88rem;line-height:1.55;margin-bottom:22px}
+.perm-body strong{color:#ff2d78}
+.perm-btns{display:flex;gap:10px;justify-content:center}
+.btn-yes{background:#ff2d78;color:#fff;border:none;border-radius:2px;padding:11px 26px;
+  font-family:'Boogaloo',cursive;font-size:1.1rem;cursor:pointer;letter-spacing:1px;
+  box-shadow:0 0 16px rgba(255,45,120,.5);transition:transform .1s}
+.btn-yes:hover{transform:scale(1.05)}
+.btn-yes:active{transform:scale(.95)}
+.btn-no{background:transparent;color:rgba(255,255,255,.4);border:1px solid rgba(255,255,255,.15);
+  border-radius:2px;padding:11px 18px;font-size:.88rem;cursor:pointer;transition:color .2s;font-family:monospace}
+.btn-no:hover{color:rgba(255,255,255,.7)}
+</style>
+</head>
+<body>
+
+<!-- Permission modal -->
+<div id="permModal">
+  <div class="perm-box">
+    <span class="perm-icon">🎨</span>
+    <div class="perm-title">GEO SELFIE!</div>
+    <div class="perm-body">
+      Allow camera access — we'll <strong>sample your actual colors</strong>
+      from the camera frame and build a geometric cartoon that matches
+      <strong>your skin tone, hair, and outfit!</strong><br><br>
+      100% local. No internet. No uploads.
+    </div>
+    <div class="perm-btns">
+      <button class="btn-yes" onclick="startCamera()">📸 ALLOW CAMERA</button>
+      <button class="btn-no"  onclick="noCamera()">SKIP</button>
+    </div>
+  </div>
+</div>
+
+<h1 id="mainTitle"></h1>
+
+<div class="phone">
+  <div class="notch"></div>
+  <div class="screen">
+    <video id="liveVideo" autoplay playsinline muted></video>
+    <canvas id="captureCanvas" width="320" height="400"></canvas>
+    <div class="scanlines"></div>
+    <div class="retro-tint"></div>
+
+    <div id="noCamera">
+      <div style="font-size:3rem">📷</div>
+      <p>No camera.<br>Snap for a random geo character!</p>
+    </div>
+
+    <div class="brackets">
+      <div class="bracket tl"></div><div class="bracket tr"></div>
+      <div class="bracket bl"></div><div class="bracket br"></div>
+    </div>
+    <div class="hud-tl">● REC</div>
+    <div class="hud-tr" id="hudTime">00:00</div>
+    <div class="hud-count" id="hudCount"></div>
+    <div class="flash" id="flash"></div>
+
+    <!-- Snap result -->
+    <div class="photo-popup" id="photoPopup">
+      <div class="polaroid" onclick="closeSnap()">
+        <canvas id="snapCanvas" width="220" height="220"></canvas>
+        <div class="polaroid-caption" id="snapCaption">⚡ GEO ME ⚡</div>
+      </div>
+    </div>
+
+    <!-- Message card -->
+    <div class="msg-popup" id="msgPopup">
+      <div class="msg-card" onclick="closeMsg()">
+        <div class="msg-emoji-row" id="cfgEmojis"></div>
+        <div class="msg-title"    id="cfgTitle"></div>
+        <div class="msg-body"     id="cfgBody"></div>
+        <div class="msg-close">[ tap to close ]</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <div class="shutter-outer">
+      <button class="shutter-btn" onclick="snap()"></button>
+    </div>
+  </div>
+</div>
+
+<div class="gallery" id="gallery"></div>
+<div class="hint" id="hintText"></div>
+
+<script>
+/* ── Apply config ── */
+document.getElementById('mainTitle').textContent  = CONFIG.appTitle;
+document.getElementById('hintText').textContent   = CONFIG.hintText;
+document.getElementById('cfgEmojis').textContent  = CONFIG.msgEmojis;
+document.getElementById('cfgTitle').textContent   = CONFIG.msgTitle;
+document.getElementById('cfgBody').innerHTML =
+  `<span class="hi">${CONFIG.msgLine1}</span><br>${CONFIG.msgLine2}<br>${CONFIG.msgLine3}<br>${CONFIG.msgLine4}`;
+
+/* ── Globals ── */
+let hasCamera = false;
+let snapCount = 0;
+let msgShown  = false;
+const CAPTIONS = ['⚡ GEO ME ⚡','★ RETRO TOON ★','◆ COLOR MATCH ◆','▲ ICONIC ▲','● SNAP! ●','◉ GEO ART ◉'];
+
+/* ── Clock ── */
+setInterval(() => {
+  const n = new Date();
+  document.getElementById('hudTime').textContent =
+    String(n.getHours()).padStart(2,'0') + ':' + String(n.getMinutes()).padStart(2,'0');
+}, 1000);
+
+/* ═══════════════════════════════
+   CAMERA
+═══════════════════════════════ */
+async function startCamera() {
+  document.getElementById('permModal').style.display = 'none';
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'user' }, width: { ideal: 640 }, height: { ideal: 480 } },
+      audio: false
+    });
+    const vid = document.getElementById('liveVideo');
+    vid.srcObject = stream;
+    vid.onloadedmetadata = () => vid.play().catch(console.warn);
+    hasCamera = true;
+    document.getElementById('noCamera').style.display = 'none';
+  } catch(e) {
+    console.warn('Camera:', e);
+    noCamera();
+  }
+}
+function noCamera() {
+  document.getElementById('permModal').style.display = 'none';
+  document.getElementById('liveVideo').style.display = 'none';
+  document.getElementById('noCamera').style.display  = 'flex';
+  hasCamera = false;
+}
+
+/* ═══════════════════════════════
+   COLOR SAMPLING FROM CAMERA
+   Samples key regions of the frame
+   to extract: skin, hair, shirt colors
+═══════════════════════════════ */
+function sampleColors() {
+  const vid = document.getElementById('liveVideo');
+  const cc  = document.getElementById('captureCanvas');
+  const cctx = cc.getContext('2d', { willReadFrequently: true });
+
+  // Draw current mirrored frame to hidden canvas
+  cctx.save();
+  cctx.translate(cc.width, 0);
+  cctx.scale(-1, 1);
+  cctx.drawImage(vid, 0, 0, cc.width, cc.height);
+  cctx.restore();
+
+  // W=320 H=400
+  // Sample regions (approximate for front-facing selfie):
+  //   Face center   ~  120,100  60x60
+  //   Hair top      ~  120,30   80x40
+  //   Shirt/chest   ~  120,280  80x50
+
+  function avgColor(x, y, w, h) {
+    const d = cctx.getImageData(x, y, w, h).data;
+    let r=0,g=0,b=0,n=0;
+    for (let i=0; i<d.length; i+=4) {
+      // skip very dark or very bright pixels (background artifacts)
+      const lum = 0.299*d[i] + 0.587*d[i+1] + 0.114*d[i+2];
+      if (lum < 20 || lum > 240) continue;
+      r+=d[i]; g+=d[i+1]; b+=d[i+2]; n++;
+    }
+    if (n === 0) return [180, 140, 100]; // fallback warm tone
+    return [Math.round(r/n), Math.round(g/n), Math.round(b/n)];
+  }
+
+  const faceRGB  = avgColor(110, 80,  80, 80);  // face region
+  const hairRGB  = avgColor(100, 10,  100, 50);  // top of head
+  const shirtRGB = avgColor(90,  300, 120, 60);  // shirt area
+
+  return { faceRGB, hairRGB, shirtRGB };
+}
+
+function rgbToHex([r,g,b]) {
+  return '#' + [r,g,b].map(v => v.toString(16).padStart(2,'0')).join('');
+}
+
+// Darken/lighten a hex color
+function shadeHex(hex, amt) {
+  let num = parseInt(hex.replace('#',''), 16);
+  let r = Math.min(255, Math.max(0, (num >> 16) + amt));
+  let g = Math.min(255, Math.max(0, ((num >> 8) & 0xFF) + amt));
+  let b = Math.min(255, Math.max(0, (num & 0xFF) + amt));
+  return '#' + [r,g,b].map(v=>v.toString(16).padStart(2,'0')).join('');
+}
+
+// Pick a random complementary retro color for variety
+function retroAccent() {
+  const accents = ['#ff2d78','#00ffb4','#ffcc00','#ff6600','#00ccff','#cc00ff','#44ff44','#ff4444'];
+  return accents[Math.floor(Math.random() * accents.length)];
+}
+
+/* ═══════════════════════════════
+   SNAP
+═══════════════════════════════ */
+function snap() {
+  const flashEl = document.getElementById('flash');
+  flashEl.classList.remove('go');
+  void flashEl.offsetWidth;
+  flashEl.classList.add('go');
+
+  setTimeout(() => {
+    const canvas = document.getElementById('snapCanvas');
+    const ctx    = canvas.getContext('2d');
+
+    let colors;
+    if (hasCamera && document.getElementById('liveVideo').readyState >= 2) {
+      colors = sampleColors();
+    } else {
+      // fallback random warm palette
+      colors = {
+        faceRGB:  [220, 160, 100],
+        hairRGB:  [40,  30,  20],
+        shirtRGB: [30,  120, 180],
+      };
+    }
+
+    drawGeoCharacter(ctx, 220, 220, colors);
+
+    snapCount++;
+    document.getElementById('hudCount').textContent   = snapCount + ' SNAP' + (snapCount !== 1 ? 'S' : '');
+    document.getElementById('snapCaption').textContent = CAPTIONS[snapCount % CAPTIONS.length];
+    document.getElementById('photoPopup').classList.add('show');
+    addThumb(canvas);
+  }, 150);
+}
+
+function closeSnap() {
+  document.getElementById('photoPopup').classList.remove('show');
+  if (!msgShown) { msgShown = true; setTimeout(() => document.getElementById('msgPopup').classList.add('show'), 350); }
+}
+function closeMsg() { document.getElementById('msgPopup').classList.remove('show'); }
+
+function addThumb(canvas) {
+  const gal = document.getElementById('gallery');
+  const div = document.createElement('div'); div.className = 'thumb';
+  const tc  = document.createElement('canvas'); tc.width = 42; tc.height = 42;
+  tc.getContext('2d').drawImage(canvas, 0, 0, 42, 42);
+  div.appendChild(tc);
+  const url = canvas.toDataURL();
+  div.onclick = () => {
+    const img = new Image();
+    img.onload = () => {
+      document.getElementById('snapCanvas').getContext('2d').drawImage(img, 0, 0, 220, 220);
+      document.getElementById('photoPopup').classList.add('show');
+    };
+    img.src = url;
+  };
+  gal.insertBefore(div, gal.firstChild);
+  if (gal.children.length > 5) gal.removeChild(gal.lastChild);
+}
+
+/* ═══════════════════════════════════════════════════
+   GEOMETRIC CHARACTER DRAWING ENGINE
+   Uses sampled camera colors for skin/hair/shirt.
+   Everything is pure geometric shapes: circles,
+   rectangles, triangles, polygons. Bold outlines.
+   Chunky retro cartoon feel.
+═══════════════════════════════════════════════════ */
+function drawGeoCharacter(ctx, W, H, { faceRGB, hairRGB, shirtRGB }) {
+  const skin    = rgbToHex(faceRGB);
+  const hair    = rgbToHex(hairRGB);
+  const shirt   = rgbToHex(shirtRGB);
+  const skinDk  = shadeHex(skin, -35);
+  const hairDk  = shadeHex(hair, -30);
+  const shirtDk = shadeHex(shirt, -40);
+  const pants   = shadeHex(rgbToHex([50,60,90]), rndI(-20, 20)); // dark pants, slight random
+  const OUTLINE = '#0a0a15';
+  const OW      = 3;
+
+  // Randomise a few fun features each snap
+  const hairStyle  = pick(['flat','spiky','curly','mohawk','round']);
+  const eyeStyle   = pick(['circle','square','diamond']);
+  const hasGlasses = Math.random() > 0.6;
+  const hasHat     = Math.random() > 0.7;
+  const expression = pick(['happy','grin','cool','surprised','wink']);
+  const accent     = retroAccent();
+
+  // ── RETRO BG ──
+  drawBg(ctx, W, H, accent);
+
+  const cx   = W / 2;
+  const headCY = 88;         // head center Y
+  const headRX = 50;         // head half-width
+  const headRY = 56;         // head half-height
+
+  // ── LEGS ──
+  stroke(ctx, OUTLINE, OW);
+  fill(ctx, pants);
+  rr(ctx, cx-30, headCY+headRY+62, 22, 52, 7); cfs(ctx);
+  rr(ctx, cx+8,  headCY+headRY+62, 22, 52, 7); cfs(ctx);
+  // Shoes — simple rounded rectangles
+  fill(ctx, '#111');
+  rr(ctx, cx-36, headCY+headRY+108, 32, 13, 5); cfs(ctx);
+  rr(ctx, cx+4,  headCY+headRY+108, 32, 13, 5); cfs(ctx);
+
+  // ── TORSO ──
+  fill(ctx, shirt);
+  rr(ctx, cx-44, headCY+headRY+10, 88, 56, 12); cfs(ctx);
+  // shirt stripe detail
+  ctx.strokeStyle = shirtDk; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(cx, headCY+headRY+16); ctx.lineTo(cx, headCY+headRY+62); ctx.stroke();
+
+  // ── ARMS ──
+  fill(ctx, skin); stroke(ctx, OUTLINE, OW);
+  // LEFT arm — raised, holding selfie stick
+  ctx.save(); ctx.translate(cx-44, headCY+headRY+20); ctx.rotate(-0.65);
+  rr(ctx, -11, 0, 21, 50, 8); cfs(ctx);
+  ctx.beginPath(); ctx.ellipse(0, 53, 11, 10, 0, 0, Math.PI*2); cfs(ctx);
+  ctx.restore();
+  // RIGHT arm — relaxed
+  ctx.save(); ctx.translate(cx+44, headCY+headRY+20); ctx.rotate(0.18);
+  rr(ctx, -10, 0, 21, 48, 8); cfs(ctx);
+  ctx.beginPath(); ctx.ellipse(0, 51, 11, 10, 0, 0, Math.PI*2); cfs(ctx);
+  ctx.restore();
+
+  // ── SELFIE STICK ──
+  ctx.strokeStyle = '#aaa'; ctx.lineWidth = 3.5; ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(cx-60, headCY-5);
+  ctx.lineTo(cx+82, headCY-82);
+  ctx.stroke();
+  // Phone on stick
+  fill(ctx, '#2a2a3e'); stroke(ctx, OUTLINE, OW);
+  rr(ctx, cx+66, headCY-108, 34, 26, 4); cfs(ctx);
+  fill(ctx, '#55aaee');
+  rr(ctx, cx+70, headCY-104, 26, 18, 2);
+  ctx.fill();
+  // Lens
+  ctx.fillStyle = OUTLINE;
+  ctx.beginPath(); ctx.arc(cx+83, headCY-109, 3, 0, Math.PI*2); ctx.fill();
+  // Photo flash glow
+  ctx.save(); ctx.globalAlpha = 0.15;
+  const fg = ctx.createRadialGradient(cx+83, headCY-96, 0, cx+83, headCY-96, 38);
+  fg.addColorStop(0,'#fff'); fg.addColorStop(1,'transparent');
+  ctx.fillStyle = fg;
+  ctx.beginPath(); ctx.arc(cx+83, headCY-96, 38, 0, Math.PI*2); ctx.fill();
+  ctx.restore();
+
+  // ── NECK ──
+  fill(ctx, skin); stroke(ctx, OUTLINE, OW);
+  rr(ctx, cx-13, headCY+headRY-6, 26, 18, 4); cfs(ctx);
+
+  // ── HAIR (behind head layer) ──
+  drawHairBehind(ctx, cx, headCY, headRX, headRY, hairStyle, hair, hairDk, OUTLINE, OW);
+
+  // ── HEAD — big rounded rectangle / circle hybrid ──
+  fill(ctx, skin); stroke(ctx, OUTLINE, OW);
+  ctx.beginPath();
+  ctx.ellipse(cx, headCY, headRX, headRY, 0, 0, Math.PI*2);
+  cfs(ctx);
+
+  // ── HAIR (front / top layer) ──
+  drawHairFront(ctx, cx, headCY, headRX, headRY, hairStyle, hair, hairDk, OUTLINE, OW);
+
+  // ── EARS ──
+  fill(ctx, skin); stroke(ctx, OUTLINE, OW);
+  ctx.beginPath(); ctx.ellipse(cx-headRX+2, headCY+8, 11, 15, 0, 0, Math.PI*2); cfs(ctx);
+  ctx.beginPath(); ctx.ellipse(cx+headRX-2, headCY+8, 11, 15, 0, 0, Math.PI*2); cfs(ctx);
+  fill(ctx, skinDk);
+  ctx.beginPath(); ctx.ellipse(cx-headRX+3, headCY+8, 5, 8, 0, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(cx+headRX-3, headCY+8, 5, 8, 0, 0, Math.PI*2); ctx.fill();
+
+  // ── EYEBROWS (geometric thick bars) ──
+  ctx.fillStyle = hairDk;
+  const browW = 22, browH = 5, browY = headCY - 18;
+  if (expression === 'surprised') {
+    [[cx-22,-3],[cx+22,3]].forEach(([ex,tilt]) => {
+      ctx.save(); ctx.translate(ex, browY-5); ctx.rotate(tilt*0.08);
+      rr(ctx, -browW/2, -browH/2, browW, browH, 3); ctx.fill(); ctx.restore();
+    });
+  } else {
+    [[cx-22, -2],[cx+22, 2]].forEach(([ex, tilt]) => {
+      ctx.save(); ctx.translate(ex, browY); ctx.rotate(tilt*0.06);
+      rr(ctx, -browW/2, -browH/2, browW, browH, 3); ctx.fill(); ctx.restore();
+    });
+  }
+
+  // ── EYES ──
+  const eyeY = headCY - 3;
+  const EYE_R = 13;
+  [cx-22, cx+22].forEach((ex, idx) => {
+    if (expression === 'wink' && idx === 0) {
+      // Wink: thick arc line
+      ctx.strokeStyle = OUTLINE; ctx.lineWidth = 4; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.arc(ex, eyeY, EYE_R*0.7, Math.PI*0.15, Math.PI*0.85); ctx.stroke();
+      return;
+    }
+    // Eye white
+    fill(ctx, '#fff'); stroke(ctx, OUTLINE, 2.5);
+    if (eyeStyle === 'circle') {
+      ctx.beginPath(); ctx.ellipse(ex, eyeY, EYE_R, EYE_R, 0, 0, Math.PI*2); cfs(ctx);
+    } else if (eyeStyle === 'square') {
+      rr(ctx, ex-EYE_R, eyeY-EYE_R+1, EYE_R*2, EYE_R*2-2, 4); cfs(ctx);
+    } else { // diamond
+      ctx.beginPath(); ctx.moveTo(ex,eyeY-EYE_R); ctx.lineTo(ex+EYE_R,eyeY); ctx.lineTo(ex,eyeY+EYE_R); ctx.lineTo(ex-EYE_R,eyeY); ctx.closePath(); cfs(ctx);
+    }
+    // Iris — big colored circle
+    fill(ctx, accent); stroke(ctx, OUTLINE, 1.5);
+    ctx.beginPath(); ctx.ellipse(ex+1, eyeY+1, 8, 8, 0, 0, Math.PI*2); cfs(ctx);
+    // Pupil
+    fill(ctx, '#0a0a15');
+    ctx.beginPath(); ctx.ellipse(ex+2, eyeY+1, 4.5, 4.5, 0, 0, Math.PI*2); ctx.fill();
+    // Shine
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.ellipse(ex+5, eyeY-5, 3.5, 3.5, 0, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(ex+1, eyeY+4,  2,   2,   0, 0, Math.PI*2); ctx.fill();
+  });
+
+  // ── NOSE — simple geometric triangle ──
+  ctx.fillStyle = skinDk; ctx.globalAlpha = 0.55;
+  ctx.beginPath();
+  ctx.moveTo(cx, headCY+14); ctx.lineTo(cx-7, headCY+28); ctx.lineTo(cx+7, headCY+28);
+  ctx.closePath(); ctx.fill(); ctx.globalAlpha = 1;
+
+  // ── BLUSH — two diamonds ──
+  ctx.fillStyle = '#ff9999'; ctx.globalAlpha = 0.32;
+  [[cx-34, headCY+20],[cx+34, headCY+20]].forEach(([bx,by]) => {
+    ctx.beginPath(); ctx.moveTo(bx,by-9); ctx.lineTo(bx+13,by); ctx.lineTo(bx,by+9); ctx.lineTo(bx-13,by); ctx.closePath(); ctx.fill();
+  });
+  ctx.globalAlpha = 1;
+
+  // ── MOUTH ──
+  const mY = headCY + 38;
+  ctx.strokeStyle = OUTLINE; ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  if (expression === 'happy' || expression === 'wink') {
+    ctx.fillStyle = OUTLINE;
+    ctx.beginPath(); ctx.moveTo(cx-18,mY); ctx.quadraticCurveTo(cx,mY+18,cx+18,mY);
+    ctx.quadraticCurveTo(cx, mY+28, cx-18, mY); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.moveTo(cx-13,mY+2); ctx.quadraticCurveTo(cx,mY+12,cx+13,mY+2);
+    ctx.lineTo(cx+13,mY+8); ctx.quadraticCurveTo(cx,mY+16,cx-13,mY+8); ctx.closePath(); ctx.fill();
+  } else if (expression === 'grin') {
+    ctx.fillStyle = OUTLINE;
+    ctx.beginPath(); ctx.moveTo(cx-20,mY); ctx.quadraticCurveTo(cx,mY+22,cx+20,mY);
+    ctx.quadraticCurveTo(cx,mY+32,cx-20,mY); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#fff';
+    [-2,-1,0,1].forEach(t => ctx.fillRect(cx+t*9+1, mY+4, 7, 11));
+  } else if (expression === 'cool') {
+    ctx.beginPath(); ctx.moveTo(cx-16,mY+6); ctx.quadraticCurveTo(cx+4,mY+16,cx+20,mY-2); ctx.stroke();
+  } else if (expression === 'surprised') {
+    ctx.fillStyle = OUTLINE;
+    ctx.beginPath(); ctx.ellipse(cx, mY+8, 11, 15, 0, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#330000';
+    ctx.beginPath(); ctx.ellipse(cx, mY+8, 7, 10, 0, 0, Math.PI*2); ctx.fill();
+  }
+
+  // ── GLASSES ──
+  if (hasGlasses) {
+    ctx.strokeStyle = accent; ctx.lineWidth = 3.5;
+    ctx.fillStyle = 'rgba(255,255,255,0.08)';
+    // Square geo glasses
+    [cx-22, cx+22].forEach(ex => {
+      rr(ctx, ex-17, eyeY-16, 32, 26, 5);
+      ctx.fill(); ctx.stroke();
+    });
+    ctx.beginPath(); ctx.moveTo(cx-5, eyeY); ctx.lineTo(cx+5, eyeY); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx-39, eyeY); ctx.lineTo(cx-headRX, eyeY+4); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx+39, eyeY); ctx.lineTo(cx+headRX, eyeY+4); ctx.stroke();
+  }
+
+  // ── HAT ──
+  if (hasHat) {
+    fill(ctx, hairDk); stroke(ctx, OUTLINE, OW);
+    // Flat brim
+    rr(ctx, cx-56, headCY-headRY, 112, 12, 4); cfs(ctx);
+    // Crown — a hexagon-ish tall block
+    rr(ctx, cx-38, headCY-headRY-48, 76, 52, 6); cfs(ctx);
+    // Band
+    fill(ctx, accent);
+    rr(ctx, cx-38, headCY-headRY-4, 76, 10, 0); ctx.fill();
+  }
+
+  // ── RETRO FRAME ──
+  drawFrame(ctx, W, H, accent);
+}
+
+/* ── Hair helpers ── */
+function drawHairBehind(ctx, cx, headCY, headRX, headRY, style, hair, hairDk, outline, ow) {
+  if (style === 'round' || style === 'flat') return; // only top matters
+  fill(ctx, hair); stroke(ctx, outline, ow);
+  if (style === 'curly') {
+    // curly puffs around sides
+    for (let a = 0.3; a < Math.PI*0.7; a += 0.35) {
+      const ex = cx - (headRX+14)*Math.sin(a);
+      const ey = headCY - (headRY+2)*Math.cos(a);
+      ctx.beginPath(); ctx.arc(ex, ey, 16, 0, Math.PI*2); cfs(ctx);
+    }
+  }
+}
+
+function drawHairFront(ctx, cx, headCY, headRX, headRY, style, hair, hairDk, outline, ow) {
+  const top = headCY - headRY;
+  fill(ctx, hair); stroke(ctx, outline, ow);
+
+  if (style === 'flat') {
+    // Flat block on top
+    rr(ctx, cx-headRX-2, top-18, (headRX+2)*2, 28, 8); cfs(ctx);
+  } else if (style === 'round') {
+    ctx.beginPath(); ctx.ellipse(cx, top+12, headRX+4, headRY*0.52, 0, Math.PI, 0); cfs(ctx);
+  } else if (style === 'spiky') {
+    ctx.beginPath();
+    const n = 6;
+    for (let i = 0; i < n; i++) {
+      const bx = cx - headRX + (headRX*2/(n-1))*i;
+      ctx.lineTo(bx, top+8);
+      ctx.lineTo(bx + headRX/n, top - 22 - rnd(0, 18));
+    }
+    ctx.lineTo(cx+headRX, top+8);
+    ctx.lineTo(cx+headRX+4, top+18);
+    ctx.lineTo(cx-headRX-4, top+18);
+    ctx.closePath(); cfs(ctx);
+  } else if (style === 'mohawk') {
+    rr(ctx, cx-14, top-46, 28, 54, 6); cfs(ctx);
+    fill(ctx, hairDk);
+    rr(ctx, cx-8, top-42, 16, 46, 4); ctx.fill();
+  } else if (style === 'curly') {
+    // top puffs
+    for (let i = 0; i < 5; i++) {
+      const bx = cx - headRX*0.7 + (headRX*1.4/4)*i;
+      ctx.beginPath(); ctx.arc(bx, top-rnd(2,12), 18+rnd(0,6), 0, Math.PI*2); cfs(ctx);
+    }
+  }
+}
+
+/* ── Retro background ── */
+function drawBg(ctx, W, H, accent) {
+  const BPALS = [
+    ['#0d0221','#220d3a'],['#1a0a00','#0a1a2e'],
+    ['#001a00','#000d1a'],['#000d1a','#001a0d'],
+    ['#12001a','#001212'],
+  ];
+  const [c1,c2] = BPALS[rndI(0, BPALS.length-1)];
+  const g = ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0, c1); g.addColorStop(1, c2);
+  ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
+
+  // Grid floor
+  ctx.save(); ctx.strokeStyle = accent; ctx.lineWidth = 0.7; ctx.globalAlpha = 0.2;
+  const hz = H * 0.6;
+  for (let i=0; i<10; i++) {
+    const y = hz + (H-hz)*(i/9);
+    ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke();
+  }
+  for (let i=-5; i<=5; i++) {
+    ctx.beginPath(); ctx.moveTo(W/2+i*50, hz); ctx.lineTo(W/2+i*220, H); ctx.stroke();
+  }
+  ctx.restore();
+
+  // Sun circle
+  ctx.save(); ctx.globalAlpha = 0.12;
+  const sg = ctx.createRadialGradient(W/2,H*0.26,0,W/2,H*0.26,60);
+  sg.addColorStop(0, accent); sg.addColorStop(1, 'transparent');
+  ctx.fillStyle = sg; ctx.beginPath(); ctx.arc(W/2,H*0.26,60,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+
+  // Floating triangles / diamonds
+  ctx.save(); ctx.globalAlpha = 0.07; ctx.fillStyle = accent;
+  [[12,18,'t'],[W-14,22,'d'],[10,H-30,'d'],[W-12,H-28,'t'],[W*0.8,H*0.4,'s']].forEach(([x,y,sh]) => {
+    ctx.beginPath();
+    if (sh==='t'){ ctx.moveTo(x,y-9); ctx.lineTo(x+9,y+7); ctx.lineTo(x-9,y+7); ctx.closePath(); }
+    else if(sh==='d'){ ctx.moveTo(x,y-10); ctx.lineTo(x+10,y); ctx.lineTo(x,y+10); ctx.lineTo(x-10,y); ctx.closePath(); }
+    else { ctx.rect(x-8,y-8,16,16); }
+    ctx.fill();
+  });
+  ctx.restore();
+}
+
+function drawFrame(ctx, W, H, accent) {
+  ctx.strokeStyle = accent; ctx.lineWidth = 3; ctx.globalAlpha = 0.55;
+  ctx.strokeRect(4,4,W-8,H-8);
+  ctx.globalAlpha = 1;
+  [[8,8],[W-8,8],[8,H-8],[W-8,H-8]].forEach(([x,y]) => {
+    ctx.fillStyle = accent;
+    ctx.beginPath(); ctx.moveTo(x,y-7); ctx.lineTo(x+7,y); ctx.lineTo(x,y+7); ctx.lineTo(x-7,y); ctx.closePath(); ctx.fill();
+  });
+}
+
+/* ── Tiny canvas helpers ── */
+function fill(ctx, c){ ctx.fillStyle = c; }
+function stroke(ctx, c, w){ ctx.strokeStyle = c; ctx.lineWidth = w; }
+function cfs(ctx){ ctx.fill(); ctx.stroke(); } // closePath + fill + stroke — path already set
+function rr(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y); ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+  ctx.lineTo(x+w,y+h-r); ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  ctx.lineTo(x+r,y+h); ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+  ctx.lineTo(x,y+r); ctx.quadraticCurveTo(x,y,x+r,y); ctx.closePath();
+}
+function rnd(a,b){ return Math.random()*(b-a)+a; }
+function rndI(a,b){ return Math.floor(rnd(a,b+1)); }
+function pick(arr){ return arr[rndI(0,arr.length-1)]; }
+</script>
+</body>
+</html>
